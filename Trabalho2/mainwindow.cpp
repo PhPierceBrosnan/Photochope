@@ -32,7 +32,7 @@ bool is_number(const std::string& s)
         return !s.empty() && it == s.end();
     }
     else{
-        while (it != s.end() && std::isdigit(*it)) ++it;
+        while (it != s.end() && (std::isdigit(*it) || *it == '.')) ++it;
         return !s.empty() && it == s.end();
     }
 
@@ -270,7 +270,7 @@ void brightness(unsigned char **image, int *width, int *height, int *channels, i
     *image = newImage;
 }
 
-void contrast(unsigned char **image, int *width, int *height, int *channels, int n){
+void contrast(unsigned char **image, int *width, int *height, int *channels, double n){
 
 
 
@@ -336,11 +336,17 @@ void histogramFunction(unsigned char **image3, int *width2, int *height2, int *c
         histogram[i] = 0;
     }
 
-    if(!isGray(&image, &width, &height, &channels)){
+    if(channels != 1){
         imgToGrey(&image, &width, &height, &channels);
     }
 
-    channels = 1;
+    if(channels != 1){
+        imgToGrey(&image, &width, &height, &channels);
+    }
+
+
+
+
 
 
     if (channels == 1){
@@ -358,12 +364,15 @@ void histogramFunction(unsigned char **image3, int *width2, int *height2, int *c
 
 
 
+
+
         int counter = histogramHeight;
 
         double normal = max / (double)histogramHeight;
 
 
         int histogramSize = 256 * histogramHeight;
+
 
 
         unsigned char *histogramImage = (unsigned char*)malloc(histogramSize);
@@ -383,12 +392,25 @@ void histogramFunction(unsigned char **image3, int *width2, int *height2, int *c
                     }
 
                     index++;
+
+
             }
             counter--;
             index = 0;
         }
+
+
+
+
+
+
+
         stbi_write_jpg("histogram.jpg", 256, histogramHeight, 1, histogramImage, 100);
+
+
     }
+
+
 }
 
 void equalizationGrey(unsigned char **image, int *width, int *height, int *channels){
@@ -546,7 +568,59 @@ void matching(unsigned char **imageSrc, int *width, int *height, int *channels, 
 }
 
 
+void convolution(unsigned char **image, int *width, int *height, int *channels, double value1, double value2, double value3, double value4, double value5, double value6, double value7, double value8, double value9){
 
+
+
+
+
+    unsigned char *modified_img = (unsigned char *)malloc((*width) * (*height) * (*channels));
+
+
+    double filter[3][3];
+    filter[0][0] = value1;
+    filter[0][1] = value2;
+    filter[0][2] = value3;
+    filter[1][0] = value4;
+    filter[1][1] = value5;
+    filter[1][2] = value6;
+    filter[2][0] = value7;
+    filter[2][1] = value8;
+    filter[2][2] = value9;
+
+    for(int y = 0; y < (*height); y+=1){
+        for(int x = 0; x < (*width) * (*channels); x+=3){
+            double new_pixel =
+            (double)(*(*image + x + y * (*width) * (*channels)))*filter[1][1] +
+            (double)(*(*image + x + (y+1) * (*width) * (*channels)))*filter[2][1] +
+            (double)(*(*image + x + (y-1) * (*width) * (*channels)))*filter[0][1] +
+            (double)(*(*image + x+3 + y * (*width) * (*channels)))*filter[1][2] +
+            (double)(*(*image + x-3 + y * (*width) * (*channels)))*filter[1][0] +
+            (double)(*(*image + x+3 + (y+1) * (*width) * (*channels)))*filter[2][2] +
+            (double)(*(*image + x+3 + (y-1) * (*width) * (*channels)))*filter[0][2] +
+            (double)(*(*image + x-3 + (y+1) * (*width) * (*channels)))*filter[2][0] +
+            (double)(*(*image + x-3 + (y-1) * (*width) * (*channels)))*filter[0][0];
+
+            if(new_pixel > 255){
+                *(modified_img + x + y * (*width) * (*channels)) = 255;
+                *(modified_img + x+1 + y * (*width) * (*channels)) = 255;
+                *(modified_img + x+2 + y * (*width) * (*channels)) = 255;
+            }
+            else if(new_pixel < 0){
+                *(modified_img + x + y * (*width) * (*channels)) = 0;
+                *(modified_img + x+1 + y * (*width) * (*channels)) = 0;
+                *(modified_img + x+2 + y * (*width) * (*channels)) = 0;
+            }
+            else{
+                *(modified_img + x + y * (*width) * (*channels)) = (uint8_t)new_pixel;
+                *(modified_img + x+1 + y * (*width) * (*channels)) = (uint8_t)new_pixel;
+                *(modified_img + x+2 + y * (*width) * (*channels)) = (uint8_t)new_pixel;
+            }
+        }
+    }
+
+    *image = modified_img;
+}
 
 
 
@@ -753,7 +827,7 @@ void MainWindow::on_pushButton_7_clicked()
 void MainWindow::on_pushButton_8_clicked()
 {
     if(is_number(ui->lineEdit_2->text().toStdString().c_str())){
-        int contrastN = ui->lineEdit_2->text().toInt();
+        double contrastN = ui->lineEdit_2->text().toDouble();
 
         int width, height, channels;
         unsigned char *image = stbi_load("working.jpg", &width, &height, &channels, 0);
@@ -896,4 +970,41 @@ void MainWindow::on_pushButton_13_clicked()
     QImage image2("working.jpg");
     ui->label_2->setPixmap(QPixmap::fromImage(image2));
     ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+}
+
+void MainWindow::on_pushButton_14_clicked()
+{
+    if(     is_number(ui->kernel1->text().toStdString().c_str()) &&
+            is_number(ui->kernel2->text().toStdString().c_str()) &&
+            is_number(ui->kernel3->text().toStdString().c_str()) &&
+            is_number(ui->kernel4->text().toStdString().c_str()) &&
+            is_number(ui->kernel5->text().toStdString().c_str()) &&
+            is_number(ui->kernel6->text().toStdString().c_str()) &&
+            is_number(ui->kernel7->text().toStdString().c_str()) &&
+            is_number(ui->kernel8->text().toStdString().c_str()) &&
+            is_number(ui->kernel9->text().toStdString().c_str())){
+
+        double value1 = ui->kernel1->text().toDouble();
+        double value2 = ui->kernel2->text().toDouble();
+        double value3 = ui->kernel3->text().toDouble();
+        double value4 = ui->kernel4->text().toDouble();
+        double value5 = ui->kernel5->text().toDouble();
+        double value6 = ui->kernel6->text().toDouble();
+        double value7 = ui->kernel7->text().toDouble();
+        double value8 = ui->kernel8->text().toDouble();
+        double value9 = ui->kernel9->text().toDouble();
+
+        int width, height, channels;
+        unsigned char *image = stbi_load("working.jpg", &width, &height, &channels, 0);
+
+        convolution(&image, &width, &height, &channels, value1, value2, value3, value4, value5, value6, value7,value8,value9);
+
+
+        stbi_write_jpg("working.jpg", width, height, channels, image, 100);
+
+        QImage image2("working.jpg");
+        ui->label_2->setPixmap(QPixmap::fromImage(image2));
+        ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+
+    }
 }
