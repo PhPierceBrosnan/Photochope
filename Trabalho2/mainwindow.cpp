@@ -336,7 +336,11 @@ void histogramFunction(unsigned char **image3, int *width2, int *height2, int *c
         histogram[i] = 0;
     }
 
-   
+    if(!isGray(&image, &width, &height, &channels)){
+        imgToGrey(&image, &width, &height, &channels);
+    }
+
+    channels = 1;
 
 
     if (channels == 1){
@@ -389,45 +393,6 @@ void histogramFunction(unsigned char **image3, int *width2, int *height2, int *c
 
 void equalizationGrey(unsigned char **image, int *width, int *height, int *channels){
 
-        printf("%d", *channels);
-
-        size_t img_size = (*width) * (*height) * (*channels);
-        unsigned char *modified_img = (unsigned char *)malloc(img_size);
-
-        int histogram[256] = {0};
-
-        for(unsigned char *p = *image; p != *image + img_size; p += *channels){
-            histogram[*p] += 1;
-        }
-
-
-        int hist_cum[256] = {0};
-        float a = 255.0 / ((*width) * (*height));
-
-        hist_cum[0] = histogram[0];
-
-        for(int i = 1; i < 256; i++){
-            hist_cum[i] = hist_cum[i-1] + histogram[i];
-            //printf("%d\n", hist_cum[i]);
-        }
-
-        for(int i = 0; i < 256; i++){
-            hist_cum[i] = hist_cum[i] * a;
-            //printf("%d\n", hist_cum[i]);
-        }
-
-        for(unsigned char *p = *image, *pg = modified_img; p != *image + img_size; p += *channels, pg += *channels){
-            *pg = (uint8_t)hist_cum[*p];
-            *(pg+1) = (uint8_t)hist_cum[*p];
-            *(pg+2) = (uint8_t)hist_cum[*p];
-        }
-
-        *image = modified_img;
-
-}
-
-void equalizationRGB(unsigned char **image, int *width, int *height, int *channels){
-
     size_t img_size = (*width) * (*height) * (*channels);
     unsigned char *modified_img = (unsigned char *)malloc(img_size);
 
@@ -455,6 +420,43 @@ void equalizationRGB(unsigned char **image, int *width, int *height, int *channe
 
     for(unsigned char *p = *image, *pg = modified_img; p != *image + img_size; p += *channels, pg += *channels){
         *pg = hist_cum[*p];
+        *(pg+1) = hist_cum[*(p)];
+        *(pg+2) = hist_cum[*(p)];
+    }
+
+    *image = modified_img;
+
+}
+
+void equalizationRGB(unsigned char **image, int *width, int *height, int *channels){
+
+    size_t img_size = (*width) * (*height) * (*channels);
+    unsigned char *modified_img = (unsigned char *)malloc(img_size);
+
+    int histogram[256] = {0};
+
+    for(unsigned char *p = *image; p != *image + img_size; p += *channels){
+        histogram[*p] += 1;
+    }
+
+
+    int hist_cum[256] = {0};
+    float alpha = 255.0 / ((*width) * (*height));
+
+    hist_cum[0] = histogram[0];
+
+    for(int i = 1; i < 256; i++){
+        hist_cum[i] = hist_cum[i-1] + histogram[i];
+        //printf("%d\n", hist_cum[i]);
+    }
+
+    for(int i = 0; i < 256; i++){
+        hist_cum[i] = hist_cum[i] * alpha;
+        //printf("%d\n", hist_cum[i]);
+    }
+
+    for(unsigned char *p = *image, *pg = modified_img; p != *image + img_size; p += *channels, pg += *channels){
+        *pg = hist_cum[*p];
         *(pg+1) = hist_cum[*(p+1)];
         *(pg+2) = hist_cum[*(p+2)];
     }
@@ -462,6 +464,99 @@ void equalizationRGB(unsigned char **image, int *width, int *height, int *channe
     *image = modified_img;
 
 }
+
+
+void matching(unsigned char **imageSrc, int *width, int *height, int *channels, unsigned char **imageTarget, int *widthTarget, int *heightTarget, int *channelsTarget){
+    size_t img_size = (*width) * (*height) * (*channels);
+    size_t img_sizeTar = (*widthTarget) * (*heightTarget) * (*channelsTarget);
+
+
+
+    int histogramSrc[256] = {0};
+    int histogramSrcCum[256] = {0};
+    int histogramTarget[256] = {0};
+    int histogramTargetCum[256] = {0};
+
+    int HM[256] = {0};
+
+
+    for(unsigned char *p = *imageSrc; p != *imageSrc + img_size; p += *channels){
+        histogramSrc[*p] += 1;
+    }
+
+    float alpha = 255.0 / ((*width) * (*height));
+
+    histogramSrcCum[0] = histogramSrc[0];
+
+    for(int i = 1; i < 256; i++){
+        histogramSrcCum[i] = histogramSrcCum[i-1] + histogramSrc[i];
+        //printf("%d\n", hist_cum[i]);
+    }
+
+    for(int i = 0; i < 256; i++){
+        histogramSrcCum[i] = histogramSrcCum[i] * alpha;
+        //printf("%d\n", hist_cum[i]);
+    }
+
+    for(unsigned char *p = *imageTarget; p != *imageTarget + img_sizeTar; p += *channels){
+        histogramTarget[*p] += 1;
+    }
+
+    alpha = 255.0 / ((*widthTarget) * (*heightTarget));
+
+    histogramTargetCum[0] = histogramTarget[0];
+
+    for(int i = 1; i < 256; i++){
+        histogramTargetCum[i] = histogramTargetCum[i-1] + histogramTarget[i];
+        //printf("%d\n", hist_cum[i]);
+    }
+
+    for(int i = 0; i < 256; i++){
+        histogramTargetCum[i] = histogramTargetCum[i] * alpha;
+        //printf("%d\n", hist_cum[i]);
+    }
+
+    for(int i = 0; i < 256; i++){
+       int value = histogramSrcCum[i];
+       int distance = 256;
+       int position;
+
+       for(int j = 0;j < 256; j++){
+           if(std::abs(value - histogramTargetCum[j]) < distance){
+               distance = std::abs(value - histogramTargetCum[j]);
+               position = j;
+           }
+       }
+
+       HM[i] = position;
+    }
+
+    for(int i = 0; i < 256; i++){
+        printf("%d\n", HM[i]);
+    }
+
+    for(unsigned char *p = *imageSrc; p != *imageSrc + img_size; p += *channels){
+        *p = HM[*p];
+        *(p+1) = HM[*(p+1)];
+        *(p+2) = HM[*(p+2)];
+    }
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -710,6 +805,10 @@ void MainWindow::on_pushButton_11_clicked()
 
     histogramFunction(&image, &width, &height, &channels);
 
+
+    imgToGrey(&image, &width, &height, &channels);
+
+
     stbi_write_jpg("working.jpg", width, height, channels, image, 100);
 
     QImage image2("working.jpg");
@@ -776,4 +875,25 @@ void MainWindow::on_pushButton_12_clicked()
     ui->label_2->setPixmap(QPixmap::fromImage(image2));
     ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
+}
+
+void MainWindow::on_pushButton_13_clicked()
+{
+    int widthTarget, heightTarget, channelsTarget;
+    int width, height, channels;
+
+    QString filename = QFileDialog::getOpenFileName(this, "Open image", "C://");
+
+
+    unsigned char *imageTarget = stbi_load(filename.toStdString().c_str(), &widthTarget, &heightTarget, &channelsTarget, 0);
+
+    unsigned char *imageSrc = stbi_load("working.jpg", &width, &height, &channels, 0);
+
+    matching(&imageSrc, &width, &height, &channels, &imageTarget, &widthTarget, &heightTarget, &channelsTarget);
+
+    stbi_write_jpg("working.jpg", width, height, channels, imageSrc, 100);
+
+    QImage image2("working.jpg");
+    ui->label_2->setPixmap(QPixmap::fromImage(image2));
+    ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 }
