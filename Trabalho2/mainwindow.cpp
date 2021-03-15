@@ -10,6 +10,16 @@
 #include <QDesktopWidget>
 
 
+int areSame(double A[][3], double B[][3])
+{
+    int i, j;
+    for (i = 0; i < 3; i++)
+        for (j = 0; j < 3; j++)
+            if (A[i][j] != B[i][j])
+                return 0;
+    return 1;
+}
+
 bool isGray(unsigned char **image, int *width, int *height, int *channels){
 
     size_t image_size = (*width) * (*height) * (*channels);
@@ -576,6 +586,10 @@ void convolution(unsigned char **image, int *width, int *height, int *channels, 
 
     unsigned char *modified_img = (unsigned char *)malloc((*width) * (*height) * (*channels));
 
+    double filterA[3][3] = {{-1, 0, 1}, {-1, 0, 1}, {-1, 0, 1}};
+    double filterB[3][3] = {{-1, -1, -1}, {0, 0, 0}, {1, 1, 1}};
+    double filterC[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+    double filterD[3][3] = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
 
     double filter[3][3];
     filter[0][0] = value1;
@@ -587,6 +601,22 @@ void convolution(unsigned char **image, int *width, int *height, int *channels, 
     filter[2][0] = value7;
     filter[2][1] = value8;
     filter[2][2] = value9;
+
+    int flag = 0;
+
+    if(areSame(filter, filterA)){
+        flag = 1;
+    }
+    if(areSame(filter, filterB)){
+        flag = 1;
+    }
+    if(areSame(filter, filterC)){
+        flag = 1;
+    }
+    if(areSame(filter, filterD)){
+        flag = 1;
+    }
+
 
     for(int y = 0; y < (*height); y+=1){
         for(int x = 0; x < (*width) * (*channels); x+=3){
@@ -600,6 +630,10 @@ void convolution(unsigned char **image, int *width, int *height, int *channels, 
             (double)(*(*image + x+3 + (y-1) * (*width) * (*channels)))*filter[0][2] +
             (double)(*(*image + x-3 + (y+1) * (*width) * (*channels)))*filter[2][0] +
             (double)(*(*image + x-3 + (y-1) * (*width) * (*channels)))*filter[0][0];
+
+            if(flag){
+                new_pixel += 127;
+            }
 
             if(new_pixel > 255){
                 *(modified_img + x + y * (*width) * (*channels)) = 255;
@@ -619,12 +653,138 @@ void convolution(unsigned char **image, int *width, int *height, int *channels, 
         }
     }
 
+
+
     *image = modified_img;
 }
 
 
 
+void turn(unsigned char **image, int *width, int *height, int *channels){
 
+
+
+    size_t image_size = (*width) * (*height) * (*channels);
+
+    unsigned char *newImage = (unsigned char *)malloc(image_size);
+
+    for(int y = 0; y < (*height); y++){
+        for(int x = 0; x < (*width) * (*channels); x += 3){
+            *(newImage + ((*height) * x) + (y * 3)) = *(*image + x + ((*width) * (3 * y)));
+            *(newImage + ((*height) * x) + (y * 3) + 1) = *(*image + x + ((*width) * (3 * y)) + 1);
+            *(newImage + ((*height) * x) + (y * 3) + 2) = *(*image + x + ((*width) * (3 * y)) + 2);
+        }
+    }
+
+    *image = newImage;
+
+    int aux = *width;
+    *width = *height;
+    *height = aux;
+
+
+
+    flipHorizontally(image, width, height, channels);
+
+
+
+}
+
+
+void zoomOut(unsigned char **image, int *width, int *height, int *channels, int sx, int sy){
+
+    size_t image_size = (*width) * (*height) * (*channels);
+
+    size_t newImage_size = std::ceil(*width / sx) * std::ceil(*height / sy) * (*channels);
+
+    unsigned char *newImage = (unsigned char *)malloc(image_size);
+
+
+    int cumR = 0;
+    int cumG = 0;
+    int cumB = 0;
+
+    int numPixels = 0;
+
+    int counterX = 0;
+    int counterY = 0;
+    for(unsigned char *pg = newImage; pg < newImage + newImage_size; pg += *channels){
+
+        counterX++;
+        if(counterX >= (*width / sx)){
+            counterX = 0;
+            counterY++;
+            if(counterY >= (*height) / sy){
+                break;
+            }
+        }
+
+        numPixels = 0;
+        cumR = 0;
+        cumG = 0;
+        cumB = 0;
+
+        unsigned char *initialP = *image + (counterY * sy * (*width) * (*channels));
+
+
+
+
+
+        for(unsigned char *p = initialP; p < *image + image_size && p < initialP + ((*width) * (*channels) * sy); p += (*width) * (*channels)){
+            unsigned char *initialPZ = p + (counterX * sx * (*channels));
+            for(unsigned char *pz = initialPZ; pz < p + (*width) * (*channels) && pz < initialPZ + (sx * (*channels)); pz += (*channels)){
+                cumR += *pz;
+                cumG += *(pz+1);
+                cumB += *(pz+2);
+                numPixels++;
+            }
+        }
+        *pg = cumR / numPixels;
+        *(pg+1) = cumG / numPixels;
+        *(pg+2) = cumB / numPixels;
+
+
+
+    }
+
+    *width = *width/sx;
+    *height = *height/sy;
+
+    *image = newImage;
+
+}
+
+void zoomIn(unsigned char **image, int *width, int *height, int *channels){
+
+    size_t image_size = (*width)*(*height)*(*channels);
+        unsigned char* newImage = (unsigned char*)malloc(image_size*4);
+
+        for(int i = 0; i < (*height); i++){
+            for(int j = 0; j < (*width)*(*channels); j+=3){
+                *(newImage + i*(*width)*(*channels)*2*2 + j*2) = *(*image + j + i*(*width)*(*channels));
+                *(newImage + i*(*width)*(*channels)*2*2 + j*2 + 1) = *(*image + j + i*(*width)*(*channels) + 1);
+                *(newImage + i*(*width)*(*channels)*2*2 + j*2 + 2) = *(*image + j + i*(*width)*(*channels) + 2);
+            }
+            for(int j = 3; j < (*width)*(*channels)*2; j+=6){
+                if((j+3) != ((*width)*(*channels)*2)){
+                    *(newImage + i*(*width)*(*channels)*2*2 + j) = (*(newImage + i*(*width)*(*channels)*2*2 + j - 3) + *(newImage + i*(*width)*(*channels)*2*2 + j + 3))/2;
+                    *(newImage + i*(*width)*(*channels)*2*2 + j + 1) = (*(newImage + i*(*width)*(*channels)*2*2 + j - 2) + *(newImage + i*(*width)*(*channels)*2*2 + j + 4))/2;
+                    *(newImage + i*(*width)*(*channels)*2*2 + j + 2) = (*(newImage + i*(*width)*(*channels)*2*2 + j - 1) + *(newImage + i*(*width)*(*channels)*2*2 + j + 5))/2;
+                }
+            }
+        }
+        for(int j = 0; j < (*width)*(*channels)*2; j++){
+            for(int i = 1; i < (*height)*2; i+=2){
+                if(i + 1 != (*height)*2){
+                    *(newImage + i*(*width)*(*channels)*2 + j) = (*(newImage + (i-1)*(*width)*(*channels)*2 + j) + *(newImage + (i+1)*(*width)*(*channels)*2 + j))/2;
+                }
+            }
+        }
+
+        *image = newImage;
+        *width = *width * 2;
+        *height = *height * 2;
+}
 
 
 
@@ -849,6 +1009,16 @@ void MainWindow::on_pushButton_10_clicked()
     int width, height, channels;
     unsigned char *image = stbi_load("initial.jpg", &width, &height, &channels, 0);
     stbi_write_jpg("working.jpg", width, height, channels, image, 100);
+
+    QDesktopWidget desktop;
+    QRect screenGeometry = desktop.screenGeometry();
+    int heightS = screenGeometry.height();
+    int widthS = screenGeometry.width();
+
+    int x=(widthS / 2) + 50;
+    int y=(heightS - height) / 2.0 -50;
+    ui->label_2->setGeometry(x,y,width,height);
+
     QImage image2("working.jpg");
     ui->label_2->setPixmap(QPixmap::fromImage(image2));
     ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -1007,4 +1177,88 @@ void MainWindow::on_pushButton_14_clicked()
         ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
     }
+}
+
+void MainWindow::on_pushButton_15_clicked()
+{
+    int width, height, channels;
+
+    unsigned char *image = stbi_load("working.jpg", &width, &height, &channels, 0);
+
+    turn(&image, &width, &height, &channels);
+
+    stbi_write_jpg("working.jpg", width, height, channels, image, 100);
+
+    QDesktopWidget desktop;
+    QRect screenGeometry = desktop.screenGeometry();
+    int heightS = screenGeometry.height();
+    int widthS = screenGeometry.width();
+
+    int x=(widthS / 2) + 50;
+    int y=(heightS - height) / 2.0 -50;
+    ui->label_2->setGeometry(x,y,width,height);
+
+
+    QImage image2("working.jpg");
+    ui->label_2->setPixmap(QPixmap::fromImage(image2));
+    ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+}
+
+void MainWindow::on_pushButton_16_clicked()
+{
+
+    if(is_number(ui->lineEdit_4->text().toStdString().c_str()) && is_number(ui->lineEdit_5->text().toStdString().c_str())){
+        int sx= ui->lineEdit_4->text().toInt();
+        int sy= ui->lineEdit_5->text().toInt();
+
+
+        int width, height, channels;
+
+        unsigned char *image = stbi_load("working.jpg", &width, &height, &channels, 0);
+
+
+
+        zoomOut(&image, &width, &height, &channels, sx, sy);
+
+        stbi_write_jpg("working.jpg", width, height, channels, image, 100);
+
+        QDesktopWidget desktop;
+        QRect screenGeometry = desktop.screenGeometry();
+        int heightS = screenGeometry.height();
+        int widthS = screenGeometry.width();
+
+        int x=(widthS / 2) + 50;
+        int y=(heightS - height) / 2.0 -50;
+        ui->label_2->setGeometry(x,y,width,height);
+
+
+        QImage image2("working.jpg");
+        ui->label_2->setPixmap(QPixmap::fromImage(image2));
+        ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    }
+}
+
+void MainWindow::on_pushButton_17_clicked()
+{
+    int width, height, channels;
+
+    unsigned char *image = stbi_load("working.jpg", &width, &height, &channels, 0);
+
+    zoomIn(&image, &width, &height, &channels);
+
+    stbi_write_jpg("working.jpg", width, height, channels, image, 100);
+
+    QDesktopWidget desktop;
+    QRect screenGeometry = desktop.screenGeometry();
+    int heightS = screenGeometry.height();
+    int widthS = screenGeometry.width();
+
+    int x=(widthS / 2) + 50;
+    int y=(heightS - height) / 2.0 -50;
+    ui->label_2->setGeometry(x,y,width,height);
+
+
+    QImage image2("working.jpg");
+    ui->label_2->setPixmap(QPixmap::fromImage(image2));
+    ui->label_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 }
